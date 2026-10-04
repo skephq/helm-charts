@@ -16,9 +16,10 @@ helm show values oci://ghcr.io/skephq/charts/skep-collector --version 0.1.0
 
 ## Install the Skep Collector
 
-You need a Skep account and a **collector key** (Settings, Collectors in
-Skep). A collector key can only register collectors and send observations.
-Skep's install guide prints these commands with your options filled in.
+You need a Skep account and a **collector key**, which Skep creates for you
+when you add a collector. A collector key can only register collectors and
+send observations. Skep's install guide prints these commands with your
+options filled in.
 
 1. Put the key in a Secret, so it stays out of your values and release
    history:
