@@ -1,0 +1,29 @@
+# Lints and renders every chart on pull requests and pushes.
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: install helm (checksum pinned)
+        run: .github/install-helm.sh
+      - name: lint and render
+        run: |
+          for chart in charts/*/; do
+            helm lint --strict "$chart" --set skep.endpoint=https://skep.example.com
+            for mode in gateway agent; do
+              helm template t "$chart" --set skep.endpoint=https://skep.example.com --set mode=$mode >/dev/null
+            done
+          done

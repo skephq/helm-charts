@@ -1,0 +1,55 @@
+# Publishes a chart when a release named <chart>-<version> is created
+# (for example skep-collector-0.1.0): lint, package, push to
+# oci://ghcr.io/skephq/charts and sign with cosign keyless.
+name: release
+
+on:
+  release:
+    types: [published]
+
+permissions: {}
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: write
+      id-token: write # cosign keyless
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: chart and version from the release tag
+        id: tag
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          [[ $TAG =~ ^([a-z0-9-]+)-([0-9]+\.[0-9]+\.[0-9]+)$ ]] || { echo "::error::tag must be <chart>-<X.Y.Z>"; exit 1; }
+          chart=${BASH_REMATCH[1]} version=${BASH_REMATCH[2]}
+          [[ -f charts/$chart/Chart.yaml ]] || { echo "::error::no chart $chart"; exit 1; }
+          got=$(sed -n 's/^version: //p' "charts/$chart/Chart.yaml")
+          [[ $got == "$version" ]] || { echo "::error::charts/$chart is $got, not $version"; exit 1; }
+          echo "chart=$chart" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - name: install helm (checksum pinned)
+        run: .github/install-helm.sh
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+      - name: lint, package, push and sign
+        env:
+          CHART: ${{ steps.tag.outputs.chart }}
+          VERSION: ${{ steps.tag.outputs.version }}
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ACTOR: ${{ github.actor }}
+        run: |
+          helm lint --strict "charts/$CHART" --set skep.endpoint=https://skep.example.com
+          helm package "charts/$CHART" --destination dist
+          echo "$TOKEN" | helm registry login ghcr.io --username "$ACTOR" --password-stdin
+          out=$(helm push "dist/$CHART-$VERSION.tgz" oci://ghcr.io/skephq/charts 2>&1)
+          echo "$out"
+          digest=$(echo "$out" | sed -n 's/^Digest: *//p')
+          [ -n "$digest" ] || { echo "no digest from helm push"; exit 1; }
+          echo "$TOKEN" | cosign login ghcr.io --username "$ACTOR" --password-stdin
+          cosign sign --yes "ghcr.io/skephq/charts/$CHART@$digest"
+          echo "Published \`oci://ghcr.io/skephq/charts/$CHART\` $VERSION (\`$digest\`)." >> "$GITHUB_STEP_SUMMARY"
