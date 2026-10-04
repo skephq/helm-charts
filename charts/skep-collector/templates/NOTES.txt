@@ -1,0 +1,30 @@
+Skep Collector {{ .Chart.AppVersion }} ({{ .Values.mode }}, {{ include "skep-collector.tier" . }} tier) in namespace {{ .Release.Namespace }}.
+{{- if .Values.opamp.enabled }}
+Managed by Skep over OpAMP ({{ include "skep-collector.opampEndpoint" . }}): it runs fleet "{{ .Values.skep.fleet }}"'s deployed revision.
+{{- else }}
+Configuration: {{ include "skep-collector.configFile" . }}{{ if .Values.config }} plus your overrides{{ end }}.
+{{- end }}
+
+Check that it registered with Skep ({{ .Values.skep.endpoint }}):
+  kubectl -n {{ .Release.Namespace }} logs -l app.kubernetes.io/instance={{ .Release.Name }} --tail 20 | grep "registered with control plane"
+{{- if eq .Values.mode "agent" }}
+
+Workloads send OTLP to the collector on their node:
+  OTEL_EXPORTER_OTLP_ENDPOINT=http://$(HOST_IP):4318   (HOST_IP from status.hostIP)
+{{- if .Values.systemLogs }}
+
+System logs: the collector runs as UID 65532. If the node's log files are
+readable by root or the adm group only, add the group to
+podSecurityContext.supplementalGroups.
+{{- end }}
+{{- else }}
+
+Services send OTLP to:
+  http://{{ include "skep-collector.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local:4318
+{{- if and .Values.autoscaling.enabled (include "skep-collector.tail" .) }}
+
+autoscaling.enabled is ignored: tail sampling needs every span of a trace in
+one collector, so the gateway runs one replica. Scale out with an agent or
+load_balancing tier that routes by trace ID.
+{{- end }}
+{{- end }}

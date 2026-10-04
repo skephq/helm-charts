@@ -1,0 +1,150 @@
+# Values for the skep-collector chart. Skep's install guide (Kubernetes)
+# prints the exact --set flags for the options you pick; everything here has a
+# working default except skep.endpoint.
+#
+# The collector configuration is not templated here: the chart embeds the
+# configurations Skep's install generator renders (files/config), picks one
+# by mode, backend.type, sampling and systemLogs, and sets the values below in
+# the pod environment. `config` adds your own overrides on top.
+
+# agent: a DaemonSet, one collector per node (host metrics, Kubernetes
+# metadata, optional system logs; observes pre sampling, never tail samples).
+# gateway: a Deployment and Service that your services or an agent tier send
+# to (optional tail sampling between the pre and post observers).
+mode: gateway
+
+image:
+  repository: ghcr.io/skephq/skep-otelcol
+  # Defaults to the chart's appVersion.
+  tag: ""
+  # sha256:... pins the image; wins over tag.
+  digest: ""
+  pullPolicy: IfNotPresent
+imagePullSecrets: []
+
+skep:
+  # Skep's URL as the collector reaches it, e.g. https://skep.example.com.
+  endpoint: ""
+  environment: production
+  # Fleet the collectors join (created on first registration); empty for none.
+  fleet: ""
+  # edge or gateway; empty means edge for agents and gateway for gateways.
+  tier: ""
+  # Display name. Defaults to the fleet, else <environment>-<mode>; agents
+  # append the node name, and gateways with more than one replica the pod.
+  collectorName: ""
+  # The Secret holding SKEP_API_KEY (a collector key: it can only register
+  # and upload observations) and, for backend.type honeycomb,
+  # HONEYCOMB_API_KEY. Create it before installing:
+  #   kubectl -n skep create secret generic skep-otelcol --from-literal=SKEP_API_KEY=...
+  existingSecret: skep-otelcol
+
+backend:
+  # none: Skep observes, telemetry is dropped. honeycomb, otlp (an
+  # OTLP/HTTP URL in otlpEndpoint) or gateway (agents: forward to a Skep
+  # gateway tier at gatewayEndpoint, host:port, marking what was counted).
+  type: none
+  otlpEndpoint: ""
+  gatewayEndpoint: ""
+
+# none or tail_sampling (gateway only). Tail sampling needs every span of a
+# trace in one collector, so it pins the gateway to one replica.
+sampling: none
+
+# Agents: also tail the node's system logs (syslog, messages, auth). The
+# files are usually readable by root or the adm group only; see
+# podSecurityContext.supplementalGroups.
+systemLogs: false
+
+# Run under the OpAMP supervisor: Skep pushes the fleet's deployed
+# revisions and the collector reports what it runs. Needs skep.fleet. The
+# embedded configuration and `config` are not used.
+opamp:
+  enabled: false
+  # Defaults to skep.endpoint with ws(s):// and the path /v1/opamp.
+  endpoint: ""
+
+# Extra collector configuration, merged over the generated one by the
+# collector itself (a second --config file): maps merge, lists replace.
+# For example the Honeycomb EU endpoint:
+#   config:
+#     exporters:
+#       otlp_grpc/honeycomb:
+#         endpoint: api.eu1.honeycomb.io:443
+config: {}
+
+# Creating the Secret from values puts keys in your values and release
+# history; prefer skep.existingSecret.
+secret:
+  create: false
+  skepApiKey: ""
+  honeycombApiKey: ""
+
+# Sized like the generated configurations: a 512 Mi limit, GOMEMLIMIT
+# 400 MiB, memory_limiter at 80% and 100 MiB exporter queues.
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    memory: 512Mi
+goMemLimit: 400MiB
+
+# Gateway only.
+replicaCount: 1
+autoscaling:
+  # Ignored with tail sampling (one replica).
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 5
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 70
+podDisruptionBudget:
+  enabled: true
+  maxUnavailable: 1
+service:
+  type: ClusterIP
+  annotations: {}
+
+# Agents listen on the node's IP so workloads can send to status.hostIP.
+hostPorts: true
+
+# The state directory (/var/lib/skep-otelcol): the instance UID, the last
+# snapshot, the OpAMP supervisor's storage and the persistent exporter queue
+# (file_storage/queue). emptyDir survives container restarts, not pod
+# rescheduling; set volume to any volume source to change that.
+state:
+  sizeLimit: 1Gi
+  volume: {}
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+# Agents: a ClusterRole to read pod, namespace, node and replica set
+# metadata for k8s_attributes.
+rbac:
+  create: true
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 65532
+  runAsGroup: 65532
+  fsGroup: 65532
+  seccompProfile:
+    type: RuntimeDefault
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop: [ALL]
+
+nameOverride: ""
+fullnameOverride: ""
+podAnnotations: {}
+podLabels: {}
+priorityClassName: ""
+nodeSelector: {}
+tolerations: []
+affinity: {}
+extraEnv: []

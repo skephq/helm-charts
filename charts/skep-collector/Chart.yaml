@@ -1,0 +1,18 @@
+apiVersion: v2
+name: skep-collector
+description: >-
+  The Skep Collector distribution (skep-otelcol): the upstream OpenTelemetry
+  Collector plus Skep's read only observer, as an agent DaemonSet or a
+  gateway Deployment.
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+kubeVersion: ">=1.25.0-0"
+home: https://www.skep.observer
+icon: https://raw.githubusercontent.com/skephq/helm-charts/main/assets/skep-mark.svg
+sources:
+  - https://github.com/skephq/helm-charts
+keywords:
+  - opentelemetry
+  - collector
+  - skep

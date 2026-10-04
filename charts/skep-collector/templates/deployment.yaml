@@ -1,0 +1,21 @@
+{{- if eq .Values.mode "gateway" }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "skep-collector.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "skep-collector.labels" . | nindent 4 }}
+spec:
+  {{- if include "skep-collector.tail" . }}
+  # One replica: tail sampling needs every span of a trace in one collector.
+  replicas: 1
+  {{- else if not (include "skep-collector.autoscaled" .) }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "skep-collector.selectorLabels" . | nindent 6 }}
+  template:
+    {{- include "skep-collector.podTemplate" . | nindent 4 }}
+{{- end }}

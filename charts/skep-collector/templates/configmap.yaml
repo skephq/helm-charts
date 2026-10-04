@@ -1,0 +1,20 @@
+{{- include "skep-collector.validate" . -}}
+{{- if not .Values.opamp.enabled }}
+# The collector configuration: the install generator's output for these
+# values (embedded, not templated), plus your overrides as a second file the
+# collector merges on top.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "skep-collector.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "skep-collector.labels" . | nindent 4 }}
+data:
+  config.yaml: |
+{{ .Files.Get (include "skep-collector.configFile" .) | indent 4 }}
+  {{- with .Values.config }}
+  overrides.yaml: |
+{{ toYaml . | indent 4 }}
+  {{- end }}
+{{- end }}

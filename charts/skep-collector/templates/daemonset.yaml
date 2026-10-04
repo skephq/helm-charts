@@ -1,0 +1,19 @@
+{{- if eq .Values.mode "agent" }}
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: {{ include "skep-collector.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "skep-collector.labels" . | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "skep-collector.selectorLabels" . | nindent 6 }}
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+  template:
+    {{- include "skep-collector.podTemplate" . | nindent 4 }}
+{{- end }}
