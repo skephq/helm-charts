@@ -46,7 +46,7 @@ jobs:
           helm lint --strict "charts/$CHART" --set skep.endpoint=https://skep.example.com
           helm package "charts/$CHART" --destination dist
           echo "$TOKEN" | helm registry login ghcr.io --username "$ACTOR" --password-stdin
-          out=$(helm push "dist/$CHART-$VERSION.tgz" oci://ghcr.io/skephq/charts 2>&1)
+          out=$(helm push "dist/$CHART-$VERSION.tgz" oci://ghcr.io/skephq/charts 2>&1) || { echo "$out"; exit 1; }
           echo "$out"
           digest=$(echo "$out" | sed -n 's/^Digest: *//p')
           [ -n "$digest" ] || { echo "no digest from helm push"; exit 1; }
